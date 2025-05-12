@@ -1,0 +1,712 @@
+#include <iostream>
+#include <unordered_map>
+#include <vector>
+#include <set>
+#include <string>
+#include <iomanip>
+#include <fstream>
+#include <unordered_set>
+#include <algorithm>
+
+using namespace std;
+
+struct Course {
+    string code;
+    string title;
+    int creditHours;
+    string instructor;
+    vector<string> prerequisites;
+};
+
+struct Grade {
+    string courseCode;
+    string grade;
+    string semester;
+};
+
+class Student {
+private:
+    string id;
+    string name;
+    string password;
+    set<string> registeredCourses;
+    unordered_map<string, Grade> grades;
+
+public:
+    Student() {}
+    
+    Student(const string& id, const string& name, const string& password)
+        : id(id), name(name), password(password) {}
+    
+    string getId() const { return id; }
+    string getName() const { return name; }
+    string getPassword() const { return password; }
+    const set<string>& getRegisteredCourses() const { return registeredCourses; }
+    set<string>& getRegisteredCourses() { return registeredCourses; }
+    const unordered_map<string, Grade>& getGrades() const { return grades; }
+    unordered_map<string, Grade>& getGrades() { return grades; }
+    
+    bool login(const string& password) {
+        return this->password == password;
+    }
+    
+    void registerCourse(const string& courseCode, unordered_map<string, Course>& courses) {
+        if (courses.find(courseCode) == courses.end()) {
+            cout << "Course not found.\n";
+            return;
+        }
+
+        bool prerequisitesMet = true;
+        for (const string& pre : courses[courseCode].prerequisites) {
+            // Check if the student has registered for the prerequisite
+            if (grades.find(pre) == grades.end()) {
+                cout << "You have not completed prerequisite: " << pre << endl;
+                prerequisitesMet = false;
+            }
+            else {
+                // Check if the student has passed the prerequisite (they should have a grade)
+                const Grade& grade = grades.at(pre);
+                if (grade.grade == "") {  // This implies the student has registered but not completed
+                    cout << "You have registered for " << pre << " but have not completed it yet.\n";
+                    prerequisitesMet = false;
+                }
+            }
+        }
+
+        if (prerequisitesMet) {
+            registeredCourses.insert(courseCode);
+            cout << "Registered in course: " << courseCode << endl;
+        }
+        else {
+            cout << "You cannot register for " << courseCode << " due to missing or incomplete prerequisites.\n";
+        }
+    }
+    
+    void viewGrades() {
+        cout << "\nGrades for " << name << ":\n";
+        for (const auto& pair : grades) {
+            const Grade& g = pair.second;
+            cout << g.courseCode << ": " << g.grade << " (" << g.semester << ")\n";
+        }
+    }
+    
+    double getGradePoint(const string& grade) {
+        if (grade == "A" || grade == "a") return 4.0;
+        if (grade == "B" || grade == "b") return 3.0;
+        if (grade == "C" || grade == "c") return 2.0;
+        if (grade == "D" || grade == "d") return 1.0;
+        if (grade == "F" || grade == "f") return 0.0;
+        return -1.0; // Invalid or missing grade
+    }
+    
+    void generateReport(unordered_map<string, Course>& courses) {
+        cout << "\nReport for " << name << " (" << id << "):\n";
+
+        cout << "Registered Courses:\n";
+        for (const string& course : registeredCourses) {
+            cout << "- " << course << "\n";
+        }
+
+        cout << "Grades:\n";
+        double totalGradePoints = 0;
+        int totalCredits = 0;
+
+        for (const auto& pair : grades) {
+            const Grade& g = pair.second;
+            cout << g.courseCode << ": " << g.grade << " (" << g.semester << ")\n";
+
+            // Lookup course for credit info
+            auto courseIt = courses.find(g.courseCode);
+            if (courseIt != courses.end()) {
+                double gradePoint = getGradePoint(g.grade);
+                if (gradePoint >= 0) {
+                    totalGradePoints += gradePoint * courseIt->second.creditHours;
+                    totalCredits += courseIt->second.creditHours;
+                }
+            }
+        }
+
+        if (totalCredits > 0) {
+            double gpa = totalGradePoints / totalCredits;
+            cout << fixed << setprecision(2);
+            cout << "\nOverall GPA: " << gpa << "\n";
+        }
+        else {
+            cout << "\nNo GPA available (no graded courses with credits).\n";
+        }
+    }
+    
+    void checkPrerequisites(const string& code, unordered_map<string, Course>& courses) {
+        if (courses.find(code) != courses.end()) {
+            const auto& prereqs = courses[code].prerequisites;
+            if (prereqs.empty()) {
+                cout << "No prerequisites for " << code << ".\n";
+            }
+            else {
+                cout << "Prerequisites for " << code << ": ";
+                for (const auto& pre : prereqs) {
+                    cout << pre << " ";
+                }
+                cout << endl;
+            }
+        }
+        else {
+            cout << "Course not found.\n";
+        }
+    }
+};
+
+class Admin {
+private:
+    string username;
+    string password;
+
+public:
+    Admin() {}
+    
+    Admin(const string& username, const string& password)
+        : username(username), password(password) {}
+    
+    string getUsername() const { return username; }
+    string getPassword() const { return password; }
+    
+    bool login(const string& password) {
+        return this->password == password;
+    }
+    
+    void addCourse(const string& code, const string& title, int credits, 
+                  const string& instructor, unordered_map<string, Course>& courses) {
+        courses[code] = { code, title, credits, instructor };
+        cout << "Course added: " << code << endl;
+    }
+    
+    void setCoursePrerequisites(const string& code, const vector<string>& prereqs, 
+                               unordered_map<string, Course>& courses) {
+        if (courses.find(code) != courses.end()) {
+            courses[code].prerequisites = prereqs;
+            cout << "Prerequisites updated for " << code << endl;
+        }
+    }
+    
+    void assignGrade(Student& student, const string& courseCode, const string& grade, const string& semester) {
+        student.getGrades()[courseCode] = { courseCode, grade, semester };
+        cout << "Grade assigned.\n";
+    }
+    
+    void addPrerequisite(const string& courseCode, const string& prereqCode, unordered_map<string, Course>& courses) {
+        courses[courseCode].prerequisites.push_back(prereqCode);
+        cout << "Prerequisite " << prereqCode << " added to " << courseCode << endl;
+    }
+    
+    void removePrerequisite(const string& courseCode, const string& prereqCode, unordered_map<string, Course>& courses) {
+        vector<string>& prerequisites = courses[courseCode].prerequisites;
+        prerequisites.erase(
+            remove(prerequisites.begin(), prerequisites.end(), prereqCode),
+            prerequisites.end()
+        );
+        cout << "Prerequisite " << prereqCode << " removed from " << courseCode << endl;
+    }
+};
+
+class CourseRegistrationSystem {
+private:
+    unordered_map<string, Student> students;
+    unordered_map<string, Admin> admins;
+    unordered_map<string, Course> courses;
+    
+    string generateUniqueID() {
+        string id;
+        do {
+            id = "2023";
+            for (int i = 0; i < 6; ++i)
+                id += char('0' + (rand() % 7));
+        } while (students.find(id) != students.end());  
+        return id;
+    }
+
+public:
+    void signUpStudent(const string& name, const string& password) {
+        string id = generateUniqueID();
+        students[id] = Student(id, name, password);
+        cout << "Student registered successfully. Assigned ID: " << id << "\n\n";
+    }
+
+    void signUpAdmin(const string& username, const string& password) {
+        if (admins.find(username) != admins.end()) {
+            cout << "Admin already exists.\n";
+            return;
+        }
+        admins[username] = Admin(username, password);
+        cout << "Admin registered successfully.\n";
+    }
+
+    bool loginStudent(const string& id, const string& password) {
+        auto it = students.find(id);
+        if (it != students.end()) {
+            return it->second.login(password);
+        }
+        return false;
+    }
+
+    bool loginAdmin(const string& username, const string& password) {
+        auto it = admins.find(username);
+        if (it != admins.end()) {
+            return it->second.login(password);
+        }
+        return false;
+    }
+
+    Student& getStudent(const string& id) {
+        return students[id];
+    }
+    
+    Admin& getAdmin(const string& username) {
+        return admins[username];
+    }
+    
+    unordered_map<string, Course>& getCourses() {
+        return courses;
+    }
+
+    // Save data to a file
+    void saveData() {
+        // Open files for writing
+        ofstream studentsFile("students.txt");
+        if (!studentsFile) {
+            cout << "Error opening students file for saving data.\n";
+            return;
+        }
+
+        ofstream adminsFile("admins.txt");
+        if (!adminsFile) {
+            cout << "Error opening admins file for saving data.\n";
+            return;
+        }
+
+        ofstream coursesFile("courses.txt");
+        if (!coursesFile) {
+            cout << "Error opening courses file for saving data.\n";
+            return;
+        }
+
+        // Save students
+        for (const auto& studentPair : students) {
+            const Student& s = studentPair.second;
+            studentsFile << s.getId() << "," << s.getName() << "," << s.getPassword() << "\n";
+            for (const string& courseCode : s.getRegisteredCourses()) {
+                studentsFile << "  " << courseCode << "\n";
+            }
+            for (const auto& gradePair : s.getGrades()) {
+                const Grade& g = gradePair.second;
+                studentsFile << "  " << g.courseCode << "," << g.grade << "," << g.semester << "\n";
+            }
+        }
+
+        // Save admins
+        for (const auto& adminPair : admins) {
+            const Admin& a = adminPair.second;
+            adminsFile << a.getUsername() << "," << a.getPassword() << "\n";
+        }
+
+        // Save courses
+        for (const auto& coursePair : courses) {
+            const Course& c = coursePair.second;
+            coursesFile << c.code << "," << c.title << "," << c.creditHours << "," << c.instructor << "\n";
+            for (const string& pre : c.prerequisites) {
+                coursesFile << "  " << pre << "\n";
+            }
+        }
+
+        studentsFile.close();
+        adminsFile.close();
+        coursesFile.close();
+
+        cout << "Data saved successfully.\n";
+    }
+
+    // Load data from files
+    void loadData() {
+        // === Load Students ===
+        ifstream studentFile("students.txt");
+        if (studentFile) {
+            string line;
+            string id, name, password;
+            Student s;
+
+            while (getline(studentFile, line)) {
+                if (line.empty()) continue;
+
+                if (line[0] != ' ') {
+                    if (!id.empty()) {
+                        students[id] = s;
+                    }
+                    
+                    auto p1 = line.find(',');
+                    auto p2 = line.find(',', p1 + 1);
+                    if (p1 == string::npos || p2 == string::npos) continue;
+
+                    id = line.substr(0, p1);
+                    name = line.substr(p1 + 1, p2 - p1 - 1);
+                    password = line.substr(p2 + 1);
+                    
+                    s = Student(id, name, password);
+                }
+                else {
+                    string data = line.substr(2);
+                    size_t c1 = data.find(',');
+                    size_t c2 = data.find(',', c1 + 1);
+
+                    if (c1 != string::npos && c2 != string::npos) {
+                        string code = data.substr(0, c1);
+                        string grade = data.substr(c1 + 1, c2 - c1 - 1);
+                        string semester = data.substr(c2 + 1);
+                        s.getGrades()[code] = { code, grade, semester };
+                    }
+                    else {
+                        s.getRegisteredCourses().insert(data);
+                    }
+                }
+            }
+            if (!id.empty()) {
+                students[id] = s;
+            }
+            studentFile.close();
+        }
+
+        // === Load Admins ===
+        ifstream adminFile("admins.txt");
+        if (adminFile) {
+            string line;
+            while (getline(adminFile, line)) {
+                size_t p = line.find(',');
+                if (p != string::npos) {
+                    string user = line.substr(0, p);
+                    string pass = line.substr(p + 1);
+                    admins[user] = Admin(user, pass);
+                }
+            }
+            adminFile.close();
+        }
+
+        // === Load Courses ===
+        ifstream courseFile("courses.txt");
+        if (courseFile) {
+            string line;
+            Course c;
+
+            while (getline(courseFile, line)) {
+                if (line.empty()) continue;
+
+                if (line[0] != ' ') {
+                    if (!c.code.empty()) courses[c.code] = c;
+                    c = {};
+
+                    auto p1 = line.find(',');
+                    auto p2 = line.find(',', p1 + 1);
+                    auto p3 = line.find(',', p2 + 1);
+
+                    if (p1 == string::npos || p2 == string::npos || p3 == string::npos)
+                        continue;
+
+                    c.code = line.substr(0, p1);
+                    c.title = line.substr(p1 + 1, p2 - p1 - 1);
+                    c.creditHours = stoi(line.substr(p2 + 1, p3 - p2 - 1));
+                    c.instructor = line.substr(p3 + 1);
+                }
+                else {
+                    c.prerequisites.push_back(line.substr(2));
+                }
+            }
+            if (!c.code.empty()) courses[c.code] = c;
+            courseFile.close();
+        }
+
+        cout << "Data loaded successfully.\n";
+    }
+};
+
+void studentMenu(CourseRegistrationSystem& system, const string& studentId) {
+    int choice;
+    Student& student = system.getStudent(studentId);
+    auto& courses = system.getCourses();
+    
+    while (true) {
+        cout << "\nStudent Menu:\n";
+        cout << "1. Register for a course\n";
+        cout << "2. View grades\n";
+        cout << "3. View report\n";
+        cout << "4. Check course prerequisites\n";
+        cout << "5. Logout\n";
+        cout << "Enter your choice: ";
+        cin >> choice;
+
+        switch (choice) {
+        case 1:
+        {
+            if (courses.empty()) {
+                cout << "No courses available for registration.\n";
+                break;
+            }
+
+            cout << "\nAvailable Courses:\n";
+            for (const auto& pair : courses) {
+                const Course& c = pair.second;
+                if(student.getRegisteredCourses().find(c.code) != student.getRegisteredCourses().end())
+                    continue;
+                cout << c.code << " - " << c.title
+                    << " (" << c.creditHours << " credits)"
+                    << " | Instructor: " << c.instructor << "\n";
+            }
+
+            string courseCode;
+            cout << "Enter course code to register: ";
+            cin >> courseCode;
+            student.registerCourse(courseCode, courses);
+            break;
+        }
+        case 2:
+            student.viewGrades();
+            break;
+        case 3:
+            student.generateReport(courses);
+            break;
+        case 4:
+        {
+            string code;
+            
+            for (const auto& pair : courses) {
+                const Course& c = pair.second;
+                cout << c.code << " - " << c.title
+                    << " (" << c.creditHours << " credits)"
+                    << " | Instructor: " << c.instructor << "\n";
+            }
+            cout << "Enter course code to check prerequisites: ";
+            cin >> code;
+
+            student.checkPrerequisites(code, courses);
+            break;
+        }
+        case 5:
+            return; // Logout and return to the main menu
+        default:
+            cout << "Invalid choice, please try again.\n";
+        }
+    }
+}
+
+void adminMenu(CourseRegistrationSystem& system, const string& adminUsername) {
+    int choice;
+    Admin& admin = system.getAdmin(adminUsername);
+    auto& courses = system.getCourses();
+    
+    while (true) {
+        cout << "\nAdmin Menu:\n";
+        cout << "1. Add a course\n";
+        cout << "2. Set prerequisites for a course\n";
+        cout << "3. Assign grade\n";
+        cout << "4. Logout\n";
+        cout << "Enter your choice: ";
+        cin >> choice;
+
+        switch (choice) {
+        case 1:
+        {
+            string code, title, instructor;
+            int credits;
+            cout << "Enter course code: ";
+            cin >> code;
+            cout << "Enter course title: ";
+            cin.ignore();
+            getline(cin, title);
+            cout << "Enter course credits: ";
+            cin >> credits;
+            cout << "Enter instructor name: ";
+            cin.ignore();
+            getline(cin, instructor);
+            admin.addCourse(code, title, credits, instructor, courses);
+            break;
+        }
+        case 2:
+        {
+            if (courses.empty()) {
+                cout << "No courses available.\n";
+                break;
+            }
+
+            cout << "\nAvailable Courses:\n";
+            for (const auto& pair : courses) {
+                const Course& c = pair.second;
+                cout << c.code << " - " << c.title
+                    << " (" << c.creditHours << " credits)"
+                    << " | Instructor: " << c.instructor << "\n";
+            }
+            string code;
+            cout << "Enter course code: ";
+            cin >> code;
+            
+            vector<string> pre_vector = courses[code].prerequisites;
+            unordered_set<string> pre_set(pre_vector.begin(), pre_vector.end());
+            
+            int add_remove;
+            bool exit = false;
+            
+            while(!exit) {
+                cout << "1. Add prerequisite\n";
+                cout << "2. Remove prerequisite\n";
+                cout << "3. Exit\n";
+                cout << "Enter your choice: ";
+                cin >> add_remove;
+                
+                switch(add_remove) {
+                case 1: {
+                    string pre_code;
+                    cout << "\nAvailable Courses:\n";
+                    for (const auto& pair : courses) {
+                        const Course& c = pair.second;
+                        if(pre_set.find(c.code) != pre_set.end())
+                            continue;
+                        cout << c.code << " - " << c.title
+                            << " (" << c.creditHours << " credits)"
+                            << " | Instructor: " << c.instructor << "\n";
+                    }
+                    cout << "Enter prerequisite code: ";
+                    cin >> pre_code;
+                    admin.addPrerequisite(code, pre_code, courses);
+                    pre_set.insert(pre_code);
+                    break;
+                }
+                case 2: {
+                    string pre_to_delete;
+                    cout << "\nCurrent course prerequisites:\n";
+                    for (const auto& pair : courses) {
+                        const Course& c = pair.second;
+                        if(pre_set.find(c.code) == pre_set.end())
+                            continue;
+                        cout << c.code << " - " << c.title
+                            << " (" << c.creditHours << " credits)"
+                            << " | Instructor: " << c.instructor << "\n";
+                    }
+                    cout << "Enter prerequisite code to delete: ";
+                    cin >> pre_to_delete;
+                    admin.removePrerequisite(code, pre_to_delete, courses);
+                    pre_set.erase(pre_to_delete);
+                    break;
+                }
+                case 3: {
+                    exit = true;
+                    break;
+                }
+                default:
+                    cout << "Invalid choice, please try again.\n";
+                }
+            }
+            break;
+        }
+        case 3:
+        {
+            string studentId, courseCode, grade, semester;
+            cout << "Enter student ID: ";
+            cin >> studentId;
+            
+            if (system.getStudent(studentId).getId().empty()) {
+                cout << "Student not found.\n";
+                break;
+            }
+            
+            cout << "Enter course code: ";
+            cin >> courseCode;
+            cout << "Enter grade: ";
+            cin >> grade;
+            cout << "Enter semester: ";
+            cin >> semester;
+            
+            admin.assignGrade(system.getStudent(studentId), courseCode, grade, semester);
+            break;
+        }
+        case 4:
+            return; // Logout and return to the main menu
+        default:
+            cout << "Invalid choice, please try again.\n";
+        }
+    }
+}
+
+int main() {
+    CourseRegistrationSystem system;
+
+    // Load data at the start of the program
+    system.loadData();
+
+    while (true) {
+        int authChoice;
+        cout << "\n1. Sign Up\n2. Sign In\n0. Exit\nChoose option: ";
+        cin >> authChoice;
+     
+        
+        if (authChoice == 0) {
+            // Save data before exiting
+            system.saveData();
+            break;
+        }
+
+        if (authChoice == 1) {
+            int userType;
+            cout << "1. Student\n2. Admin\nChoose type: ";
+            cin >> userType;
+            if (userType == 1) {
+                string username, password;
+                cout << "Full name: ";  cin.ignore();  getline(cin, username);
+                cout << "Password: ";   cin  >> password;
+                system.signUpStudent(username, password);
+            }
+            else {
+                string username, password;
+                cout << "Enter Admin User: ";
+                cin >> username;
+                cout << "Enter Admin Password: ";
+                cin >> password;
+                system.signUpAdmin(username, password);
+            }
+        }
+
+        else if (authChoice == 2) {
+            int userType;
+            cout << "1. Student\n2. Admin\nChoose type: ";
+            cin >> userType;
+        
+            bool loggedIn = false;
+            if (userType == 1) {
+                string username, password;
+                cout << "Enter id: ";
+                cin >> username;
+                cout << "Enter password: ";
+                cin >> password;    
+                loggedIn = system.loginStudent(username, password);
+                if (loggedIn) {
+                    cout << "Student logged in successfully.\n";
+                    studentMenu(system, username); // Redirect to student menu
+                }
+                else {
+                    cout << "Invalid credentials.\n";
+                }
+            }
+            else if (userType == 2) {
+                string username, password;
+                cout << "Enter user: ";
+                cin >> username;
+                cout << "Enter password: ";
+                cin >> password;    
+                loggedIn = system.loginAdmin(username, password);
+                if (loggedIn) {
+                    cout << "Admin logged in successfully.\n";
+                    adminMenu(system, username); // Redirect to admin menu
+                }
+                else {
+                    cout << "Invalid credentials.\n";
+                }
+            }
+        }
+    }
+
+    return 0;
+}
